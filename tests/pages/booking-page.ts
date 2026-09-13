@@ -82,6 +82,15 @@ export class BookingPage {
         return this.bookingsUpcomingSection.locator('[data-booking-id]').filter({ hasText: participantName }).getByRole('button', { name: 'Отменить', exact: true });
     }
 
+    async cancelMeeting(participantName: string): Promise<void> {
+        const cancelled = this.page.waitForResponse((response) =>
+            new URL(response.url()).pathname === ROUTES.booking &&
+            response.request().method() === "POST"
+        );
+        await this.getCancelButton(participantName).click();
+        await cancelled;
+    }
+
     getPastMeetingCard(participantName: string): Locator {
         return this.bookingsPastSection
             .locator('[data-booking-id]')

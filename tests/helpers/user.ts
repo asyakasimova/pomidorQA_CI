@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { expect, type Page, type APIRequestContext, type BrowserContext } from "@playwright/test";
 
 export const ROUTES = {
   register: "/pomidorqa/auth/register",
@@ -20,7 +20,7 @@ export type TestUser = {
   password: string;
 };
 
-export function makeUser(role: string, runId: number): TestUser {
+export function makeUser(role: string, runId: number | string): TestUser {
   return {
     name: `${role} Автотест`,
     email: `${role}-${runId}@example.com`,
@@ -35,4 +35,45 @@ export async function registerUser(page: Page, user: TestUser) {
   await registerPasswordInput(page).fill(user.password);
   await registerSubmitButton(page).click();
   await expect(page).toHaveURL(ROUTES.home);
+}
+
+export type RegisteredParticipant = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+const testAccountsRoute = "/api/pomidorqa/test/accounts";
+
+export async function registerUserViaApi(
+  request: APIRequestContext,
+  user: TestUser,
+): Promise<RegisteredParticipant> {
+  const response = await request.post(testAccountsRoute, { data: user });
+  if (response.status() !== 201) {
+    throw new Error(`Регистрация ${user.email} не удалась: ${response.status()} ${await response.text()}`);
+  }
+  return response.json();
+}
+
+export async function deleteUserViaApi(request: APIRequestContext): Promise<void> {
+  const response = await request.delete(testAccountsRoute);
+  if (response.status() !== 200) {
+    throw new Error(`Удаление аккаунта не удалось: ${response.status()} ${await response.text()}`);
+  }
+}
+
+// Ошибка одного удаления не мешает очистить остальные аккаунты и закрыть контексты.
+export async function cleanupUsersViaApi(contexts: BrowserContext[]): Promise<void> {
+  const results = await Promise.allSettled(contexts.map(async (context) => {
+    try {
+      await deleteUserViaApi(context.request);
+    } finally {
+      await context.close();
+    }
+  }));
+  const errors = results.filter((result) => result.status === "rejected");
+  if (errors.length) {
+    throw new AggregateError(errors.map((result) => result.reason), "Не удалось очистить тестовые аккаунты");
+  }
 }

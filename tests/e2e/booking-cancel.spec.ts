@@ -1,23 +1,35 @@
-import { test, expect, type Page } from "@playwright/test";
-import { makeUser, registerUser, ROUTES } from "../helpers/user";
+import { randomUUID } from "node:crypto";
+import { test, expect, type BrowserContext } from "@playwright/test";
+import { makeUser, registerUserViaApi, cleanupUsersViaApi, ROUTES } from "../helpers/user";
 import { contextOptions } from "../helpers/browser-context";
 import { BookingPage } from "../pages/booking-page";
 import { ProfilePage } from "../pages/profile-page";
 
 
+let contexts: BrowserContext[] = [];
+
+test.afterEach(async () => {
+  const createdContexts = contexts;
+  contexts = [];
+  await cleanupUsersViaApi(createdContexts);
+});
+
 test.describe("Бронирование и отмена встречи", () => {
     test("{Хост добавляет слот -> Гость бронирует слот -> Гость отменяет встречу -> Карточка переходит в прошедшие", async ({
 
     browser,
+    baseURL,
     }) => {
-        const runId = Date.now();
+        const runId = `${Date.now()}-${randomUUID()}`;
         const skillTag = `Playwright-demo-${runId}`;
         const host = makeUser("host", runId);
         const guest = makeUser("guest", runId);
 
-        // Три независимых аккаунта = три независимых браузерных контекста
-        const hostContext = await browser.newContext(contextOptions);
-        const guestContext = await browser.newContext(contextOptions);
+        // Два независимых аккаунта = два независимых браузерных контекста
+        const hostContext = await browser.newContext({ ...contextOptions, baseURL });
+        contexts.push(hostContext);
+        const guestContext = await browser.newContext({ ...contextOptions, baseURL });
+        contexts.push(guestContext);
         const hostPage = await hostContext.newPage();
         const guestPage = await guestContext.newPage();
 
@@ -27,8 +39,9 @@ test.describe("Бронирование и отмена встречи", () => {
         const guestBookingPage = new BookingPage(guestPage);
 
 
-  await test.step("Хост: регистрируется в PomidorQA", async () => {
-    await registerUser(hostPage, host);
+  await test.step("Хост: создаётся через API", async () => {
+    await registerUserViaApi(hostContext.request, host);
+    await hostPage.goto(ROUTES.home);
   });
  
   await test.step('Хост: добавляет навык «могу помочь» в профиле', async () => {
@@ -52,8 +65,9 @@ test.describe("Бронирование и отмена встречи", () => {
       await expect(hostBookingPage.slotsCard.first()).toBeVisible();
     });
 
-  await test.step("Гость: регистрируется отдельным аккаунтом", async () => {
-    await registerUser(guestPage, guest);
+  await test.step("Гость: создаётся через API", async () => {
+    await registerUserViaApi(guestContext.request, guest);
+    await guestPage.goto(ROUTES.home);
   });
 
   await test.step('Гость: ищет хоста в каталоге по навыку (сценарий 9)', async () => {
@@ -100,7 +114,7 @@ test.describe("Бронирование и отмена встречи", () => {
 
     await test.step('Гость: отменяет бронирование', async () => {
       await guestBookingPage.gotoMeetings();
-      await guestBookingPage.getCancelButton(host.name).click();
+      await guestBookingPage.cancelMeeting(host.name);
       await guestBookingPage.page.reload();
     });
 

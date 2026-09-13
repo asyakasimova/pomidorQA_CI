@@ -1,25 +1,38 @@
-import { test, expect, type Page, Browser } from "@playwright/test";
-import { makeUser, registerUser, ROUTES } from "../helpers/user";
+import { randomUUID } from "node:crypto";
+import { test, expect, type BrowserContext } from "@playwright/test";
+import { makeUser, registerUserViaApi, cleanupUsersViaApi, ROUTES } from "../helpers/user";
 import { contextOptions } from "../helpers/browser-context";
 import { BookingPage } from "../pages/booking-page";
 import { ProfilePage } from "../pages/profile-page";
 
+let contexts: BrowserContext[] = [];
+
+test.afterEach(async () => {
+  const createdContexts = contexts;
+  contexts = [];
+  await cleanupUsersViaApi(createdContexts);
+});
+
 test.describe("Бронирование встречи>", () => {
   
-  test("основной путь + гонка за слот: регистрация → навык → слот → поиск в каталоге → бронирование → «Мои встречи» у обоих → второй гость видит ошибку", async ({
+  test("основной путь + гонка за слот: API-подготовка → навык → слот → поиск в каталоге → бронирование → «Мои встречи» у обоих → второй гость видит ошибку", async ({
 
   browser,
+  baseURL,
 }) => {
-  const runId = Date.now();
+  const runId = `${Date.now()}-${randomUUID()}`;
   const skillTag = `Playwright-demo-${runId}`;
   const host = makeUser("host", runId);
   const guest = makeUser("guest", runId);
   const guest2 = makeUser("guest2", runId);
 
   // Три независимых аккаунта = три независимых браузерных контекста
-  const hostContext = await browser.newContext(contextOptions);
-  const guestContext = await browser.newContext(contextOptions);
-  const guest2Context = await browser.newContext(contextOptions);
+  const hostContext = await browser.newContext({ ...contextOptions, baseURL });
+  contexts.push(hostContext);
+  const guestContext = await browser.newContext({ ...contextOptions, baseURL });
+  contexts.push(guestContext);
+  const guest2Context = await browser.newContext({ ...contextOptions, baseURL });
+  contexts.push(guest2Context);
   const hostPage = await hostContext.newPage();
   const guestPage = await guestContext.newPage();
   const guest2Page = await guest2Context.newPage();
@@ -31,8 +44,9 @@ test.describe("Бронирование встречи>", () => {
   const guestBookingPage = new BookingPage(guestPage);
   const guest2BookingPage = new BookingPage(guest2Page);
 
-  await test.step("Хост: регистрируется в PomidorQA", async () => {
-    await registerUser(hostPage, host);
+  await test.step("Хост: создаётся через API", async () => {
+    await registerUserViaApi(hostContext.request, host);
+    await hostPage.goto(ROUTES.home);
   });
  
   await test.step('Хост: добавляет навык «могу помочь» в профиле', async () => {
@@ -56,8 +70,9 @@ test.describe("Бронирование встречи>", () => {
       await expect(hostBookingPage.slotsCard.first()).toBeVisible();
     });
 
-  await test.step("Гость: регистрируется отдельным аккаунтом", async () => {
-    await registerUser(guestPage, guest);
+  await test.step("Гость: создаётся через API", async () => {
+    await registerUserViaApi(guestContext.request, guest);
+    await guestPage.goto(ROUTES.home);
   });
 
   await test.step('Гость: ищет хоста в каталоге по навыку (сценарий 9)', async () => {
@@ -88,8 +103,9 @@ test.describe("Бронирование встречи>", () => {
 
   // Важно для разбора ДЗ 4: модалку guest2 открываем ДО confirm у guest.
   // Пока слот в UI ещё свободен — оба «человек открыл и отошёл».
-  await test.step("Гость2: регистрируется и тоже открывает окно бронирования на тот же слот", async () => {
-      await registerUser(guest2Page, guest2);
+  await test.step("Гость2: создаётся через API", async () => {
+      await registerUserViaApi(guest2Context.request, guest2);
+      await guest2Page.goto(ROUTES.home);
     });
 
     await test.step("Гость2 находит хоста в каталоге по навыку", async () => {
@@ -165,9 +181,6 @@ test.describe("Бронирование встречи>", () => {
       ).toBeVisible({ timeout: 10_000 });
     });
 
-    await hostContext.close();
-    await guestContext.close();
-    await guest2Context.close();
   });
 });
 
@@ -178,7 +191,7 @@ test.describe("Бронирование: выбор слота", () => {
   }) => {
     test.setTimeout(60_000);
 
-    const runId = Date.now();
+    const runId = `${Date.now()}-${randomUUID()}`;
     const host = makeUser(`selected-slot-host-${runId}`, runId);
     const guest = makeUser(`selected-slot-guest-${runId}`, runId);
     const skillTag = `Selected-slot-${runId}`;
@@ -190,9 +203,9 @@ test.describe("Бронирование: выбор слота", () => {
     const contexts = [];
 
     try {
-      const hostContext = await browser.newContext(contextOptions);
+      const hostContext = await browser.newContext({ ...contextOptions, baseURL });
       contexts.push(hostContext);
-      const guestContext = await browser.newContext(contextOptions);
+      const guestContext = await browser.newContext({ ...contextOptions, baseURL });
       contexts.push(guestContext);
       const hostPage = await hostContext.newPage();
       const guestPage = await guestContext.newPage();
@@ -201,9 +214,9 @@ test.describe("Бронирование: выбор слота", () => {
       const hostBookingPage = new BookingPage(hostPage);
       const guestBookingPage = new BookingPage(guestPage);
 
-      await test.step("Открываем регистрацию и создаём хоста и гостя", async () => {
-        await registerUser(hostPage, host);
-        await registerUser(guestPage, guest);
+      await test.step("Создаём хоста и гостя через API", async () => {
+        await registerUserViaApi(hostContext.request, host);
+        await registerUserViaApi(guestContext.request, guest);
       });
       await test.step("Хост: добавляет уникальный навык для поиска в каталоге", async () => {
         await hostProfilePage.goto();
@@ -292,7 +305,7 @@ test.describe("Бронирование: выбор слота", () => {
         await expect(guestBookingPage.bookingCalendarTime).toHaveText(remainingTimes);
       });
     } finally {
-      await Promise.all(contexts.map((context) => context.close()));
+      await cleanupUsersViaApi(contexts);
     }
   });
 });
