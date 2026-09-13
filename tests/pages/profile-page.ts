@@ -44,12 +44,6 @@ export class ProfilePage {
     await this.page.goto(ROUTES.profile);
   }
 
-  /* async saveName(name: string) {
-    await this.profileNameInput.fill(name);
-    await this.profileSaveButton.click();
-  }
-    */
-
   async saveProfile(page: Page) {
   const saved = page.waitForResponse(
     (response) => response.url().endsWith(ROUTES.profile) && response.request().method() === "POST"
@@ -67,19 +61,4 @@ async addSkill(tag: string, type: SkillType): Promise<void> {
   getSkillChip(tag: string): Locator {
     return this.page.locator(`[data-skill-tag="${tag}"]`);
   }
-
-  telegramInput() {
-    return this.page.getByLabel("Telegram");
-  }
-  timezoneSelect() {
-    return this.page.getByLabel("Часовой пояс");
-  }
-  bioInput() {
-    return this.page.getByLabel("О себе");
-  }
-  saveButton() {
-    return this.page.getByRole("button", { name: "Сохранить" });
-  }
-
-  
 }

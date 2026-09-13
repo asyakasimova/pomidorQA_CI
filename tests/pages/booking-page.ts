@@ -60,7 +60,6 @@ export class BookingPage {
 
         this.bookingsUpcomingSection = page.getByTestId("upcoming-meetings");
         this.bookingsCardName = this.bookingsUpcomingSection.locator("[data-booking-id]").first().locator("p").first();
-        this.bookingsPastSection = page.getByRole("heading", { name: ("Прошедшие и отменённые") });
         this.bookingsPastSection = page.locator('section').filter({has: page.getByRole('heading', { name: 'Прошедшие и отменённые', exact: true, }),});
     }
 
