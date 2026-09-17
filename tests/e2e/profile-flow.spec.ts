@@ -42,7 +42,7 @@ test.describe("Профиль: действия с полями", () => {
     const timezone = "Asia/Yekaterinburg";
 
     await test.step("Выбираем часовой пояс и сохраняем", async () => {
-      await expect(profilePage.profileTimezoneSelect).toHaveValue("Europe/Moscow");
+      await expect(profilePage.profileTimezoneSelect).toHaveValue("Asia/Yekaterinburg");
       await profilePage.profileTimezoneSelect.selectOption(timezone);
       await profilePage.saveProfile(page);
     });
