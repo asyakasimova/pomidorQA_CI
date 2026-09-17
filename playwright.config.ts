@@ -32,5 +32,27 @@ export default defineConfig({
         video: "retain-on-failure",
       },
     },
+    {
+      name: "e2e-firefox",
+        testDir: "./tests/e2e",
+        use: {
+          ...devices["Desktop Firefox"],
+          baseURL: process.env.POMIDORQA_BASE_URL ?? "https://aiqa.su",
+          trace: "retain-on-failure",
+          screenshot: "only-on-failure",
+          video: "retain-on-failure",
+        },
+      },
+      {
+        name: "e2e-webkit",
+        testDir: "./tests/e2e",
+        use: {
+          ...devices["Desktop Safari"],
+          baseURL: process.env.POMIDORQA_BASE_URL ?? "https://aiqa.su",
+          trace: "retain-on-failure",
+          screenshot: "only-on-failure",
+          video: "retain-on-failure",
+        },
+      },
   ],
 });

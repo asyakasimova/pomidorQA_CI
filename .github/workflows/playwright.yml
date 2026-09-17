@@ -51,8 +51,8 @@ jobs:
 
       # Playwright-пакет и браузерный бинарник устанавливаются отдельно.
       - name: Install Chromium and system dependencies
-        # Для учебного CI достаточно Chromium; `--with-deps` добавляет нужные библиотеки Linux.
-        run: npx playwright install --with-deps chromium
+        # добавляем Chromium, Firefox, WebKit; `--with-deps` добавляет нужные библиотеки Linux.
+        run: npx playwright install --with-deps chromium firefox webkit
 
       # Сначала запускаем быструю статическую проверку кода.
       - name: Lint tests
