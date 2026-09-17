@@ -5,16 +5,40 @@ on:
     workflows: ["Playwright CI"]
     types: [completed]
 
-permissions: {}
+permissions:
+  actions: read
 
 jobs:
   notify:
-    name: Notify about successful CI
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    name: Notify about CI result
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
     steps:
+      - name: Find Playwright report
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+
+          # Ищем отчёт исходного прогона тестов, а не запуска уведомления.
+          ARTIFACT_ID=$(gh api --paginate \
+            "repos/${REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
+            | jq -sr --arg name "playwright-report-${RUN_ID}" \
+              '[.[].artifacts[] | select(.name == $name and .expired == false)]
+               | sort_by(.id) | last | .id // empty')
+
+          if [[ -n "$ARTIFACT_ID" ]]; then
+            echo "url=${RUN_URL}/artifacts/${ARTIFACT_ID}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::HTML-отчёт этого прогона не найден или срок хранения истёк"
+          fi
+
       - name: Send Telegram message
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -23,6 +47,8 @@ jobs:
           BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          REPORT_URL: ${{ steps.report.outputs.url }}
         run: |
           set -euo pipefail
 
@@ -31,9 +57,21 @@ jobs:
             exit 1
           fi
 
+          case "$RUN_CONCLUSION" in
+            success) STATUS_MESSAGE='✅ Playwright CI успешно завершён' ;;
+            failure) STATUS_MESSAGE='❌ Playwright CI завершён с ошибками' ;;
+            *) echo "Уведомление для результата $RUN_CONCLUSION не предусмотрено"; exit 0 ;;
+          esac
+
           MESSAGE=$(printf \
-            '✅ Playwright CI успешно завершён\nРепозиторий: %s\nВетка: %s\nЗапуск: #%s\n%s' \
-            "$REPOSITORY" "$BRANCH" "$RUN_NUMBER" "$RUN_URL")
+            '%s\nРепозиторий: %s\nВетка: %s\nЗапуск: #%s\n%s' \
+            "$STATUS_MESSAGE" "$REPOSITORY" "$BRANCH" "$RUN_NUMBER" "$RUN_URL")
+
+          if [[ -n "$REPORT_URL" ]]; then
+            MESSAGE+=$(printf '\n\n📎 Скачать HTML-отчёт (ZIP):\n%s' "$REPORT_URL")
+          else
+            MESSAGE+=$'\n\nHTML-отчёт недоступен. Проверь раздел Artifacts по ссылке на запуск.'
+          fi
 
           curl --silent --show-error --fail \
             --connect-timeout 10 \
