@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
+  forbidOnly: !!process.env.CI,
   timeout: 30_000,
   fullyParallel: false,
   // В CI повторяем падение один раз, чтобы заметить флак; локально ошибка видна сразу.
