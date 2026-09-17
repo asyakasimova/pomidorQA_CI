@@ -9,10 +9,10 @@ export const ROUTES = {
 };
 
 // Регистрация
-const registerNameInput = (page: Page) => page.getByLabel("Имя");
+/* const registerNameInput = (page: Page) => page.getByLabel("Имя");
 const registerEmailInput = (page: Page) => page.getByLabel("Email");
 const registerPasswordInput = (page: Page) => page.getByLabel("Пароль");
-const registerSubmitButton = (page: Page) => page.getByRole("button", { name: "Зарегистрироваться" });
+const registerSubmitButton = (page: Page) => page.getByRole("button", { name: "Зарегистрироваться" }); */
 
 export type TestUser = {
   name: string;
@@ -22,13 +22,13 @@ export type TestUser = {
 
 export function makeUser(role: string, runId: number | string): TestUser {
   return {
-    name: `${role} Автотест`,
+    name: `${role}-${runId} Автотест`,
     email: `${role}-${runId}@example.com`,
     password: "testpass123",
   };
 }
 
-export async function registerUser(page: Page, user: TestUser) {
+/* export async function registerUser(page: Page, user: TestUser) {
   await page.goto(ROUTES.register);
   await registerNameInput(page).fill(user.name);
   await registerEmailInput(page).fill(user.email);
@@ -36,6 +36,7 @@ export async function registerUser(page: Page, user: TestUser) {
   await registerSubmitButton(page).click();
   await expect(page).toHaveURL(ROUTES.home);
 }
+  */
 
 export type RegisteredParticipant = {
   id: string;
@@ -43,7 +44,7 @@ export type RegisteredParticipant = {
   email: string;
 };
 
-const testAccountsRoute = "/api/pomidorqa/test/accounts";
+const testAccountsRoute = "/api/pomidorqa/test/accounts"; 
 
 export async function registerUserViaApi(
   request: APIRequestContext,
