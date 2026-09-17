@@ -8,7 +8,12 @@ on:
     # `main` здесь — целевая ветка PR, а не имя рабочей ветки.
     branches: [main]
   # Оставляем кнопку ручного запуска во вкладке Actions.
+  push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 # Все работы, которые выполнит workflow.
 jobs:
@@ -46,8 +51,8 @@ jobs:
 
       # Playwright-пакет и браузерный бинарник устанавливаются отдельно.
       - name: Install Chromium and system dependencies
-        # Для учебного CI достаточно Chromium; `--with-deps` добавляет нужные библиотеки Linux.
-        run: npx playwright install --with-deps chromium
+        # добавляем Chromium, Firefox, WebKit; `--with-deps` добавляет нужные библиотеки Linux.
+        run: npx playwright install --with-deps chromium firefox webkit
 
       # Сначала запускаем быструю статическую проверку кода.
       - name: Lint tests
@@ -62,6 +67,7 @@ jobs:
         env:
           # Включает CI-режим в playwright.config.ts: retry, один worker и reporter без открытия окна.
           CI: true
+          POMIDORQA_BASE_URL: ${{ vars.POMIDORQA_BASE_URL }}
 
       # Сохраняем HTML-отчёт после завершения тестов.
       - name: Upload Playwright report
