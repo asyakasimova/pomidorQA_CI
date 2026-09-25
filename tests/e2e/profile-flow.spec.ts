@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 
-import { makeUser, registerUserViaApi, deleteUserViaApi } from "../helpers/user";
+import { makeUser, registerUserViaApi, deleteUserViaApi, ROUTES } from "../helpers/user";
 import { contextOptions } from "../helpers/browser-context";
 import { ProfilePage } from "../pages/profile-page";
 
@@ -92,6 +92,45 @@ test.describe("Профиль: действия с полями", () => {
     });
 
     await test.step("Навык появился в блоке «могу помочь»", async () => {
+      await expect(profilePage.canHelpSkills).toContainText(skillTag);
+    });
+  });
+
+  test("негатив: один и тот же навык одного типа нельзя добавить дважды", async ({ page }) => {
+    const skillTag = `Duplicate-${randomUUID()}`;
+
+    await test.step("Добавляем навык «могу помочь»", async () => {
+      await profilePage.addSkill(skillTag, "can_help");
+    });
+
+    await test.step("Навык добавлен один раз", async () => {
+      await expect(profilePage.getSkillChip(skillTag)).toHaveCount(1);
+      await expect(profilePage.canHelpSkills).toContainText(skillTag);
+      await expect(profilePage.skillInput).toHaveValue("");
+    });
+
+    await test.step("Повторно отправляем тот же навык с тем же типом", async () => {
+      // Дожидаемся обработки второй попытки, чтобы не проверить старое состояние.
+      const submitted = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === ROUTES.profile &&
+        response.request().method() === "POST",
+      );
+      await profilePage.addSkill(skillTag, "can_help");
+      await submitted;
+    });
+
+    await test.step("Повторное добавление не создало дубликат", async () => {
+      await expect(profilePage.getSkillChip(skillTag)).toHaveCount(1);
+      await expect(profilePage.skillChips).toHaveCount(1);
+    });
+
+    await test.step("Перезагружаем профиль", async () => {
+      await page.reload();
+    });
+
+    await test.step("На сервере сохранён ровно один навык", async () => {
+      await expect(profilePage.getSkillChip(skillTag)).toHaveCount(1);
+      await expect(profilePage.skillChips).toHaveCount(1);
       await expect(profilePage.canHelpSkills).toContainText(skillTag);
     });
   });

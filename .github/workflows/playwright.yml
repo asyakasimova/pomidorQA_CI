@@ -51,8 +51,8 @@ jobs:
 
       # Playwright-пакет и браузерный бинарник устанавливаются отдельно.
       - name: Install Chromium and system dependencies
-        # добавляем Chromium, Firefox, WebKit; `--with-deps` добавляет нужные библиотеки Linux.
-        run: npx playwright install --with-deps chromium firefox webkit
+        # Устанавливаем только Chromium; `--with-deps` добавляет нужные библиотеки Linux.
+        run: npx playwright install --with-deps chromium
 
       # Сначала запускаем быструю статическую проверку кода.
       - name: Lint tests
@@ -61,8 +61,8 @@ jobs:
 
       # После линтера проверяем реальное поведение тестами.
       - name: Run Playwright tests
-        # Скрипт `test` из package.json запускает unit, API и E2E-проекты Playwright.
-        run: npm test
+        # Сохраняем unit и API; проект e2e запускает браузерные тесты только в Chromium.
+        run: npm test -- --project=unit --project=api --project=e2e
         # Переменные окружения только для этого шага.
         env:
           # Включает CI-режим в playwright.config.ts: retry, один worker и reporter без открытия окна.

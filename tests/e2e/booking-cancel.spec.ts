@@ -128,4 +128,105 @@ test.describe("Бронирование и отмена встречи", () => {
       await expect(hostBookingPage.getPastMeetingCard(guest.name), ).toBeVisible();
     });
   });
+
+  test("Хост добавляет слот → гость бронирует → хост отменяет встречу", async ({ browser, baseURL }) => {
+    const runId = randomUUID();
+    const host = makeUser("host", runId);
+    const guest = makeUser("guest", runId);
+    const skillTag = `Host-cancel-${runId}`;
+    const hostContext = await browser.newContext({ ...contextOptions, baseURL });
+    contexts.push(hostContext);
+    const guestContext = await browser.newContext({ ...contextOptions, baseURL });
+    contexts.push(guestContext);
+    const hostPage = await hostContext.newPage();
+    const guestPage = await guestContext.newPage();
+    const hostProfilePage = new ProfilePage(hostPage);
+    const hostBookingPage = new BookingPage(hostPage);
+    const guestBookingPage = new BookingPage(guestPage);
+
+    await test.step("Создаём участников через API и открываем профиль хоста", async () => {
+      await registerUserViaApi(hostContext.request, host);
+      await registerUserViaApi(guestContext.request, guest);
+      await hostProfilePage.goto();
+    });
+
+    await test.step("Хост добавляет навык для поиска в каталоге", async () => {
+      await hostProfilePage.addSkill(skillTag, "can_help");
+    });
+
+    await test.step("Навык сохранён", async () => {
+      await expect(hostProfilePage.canHelpSkills).toContainText(skillTag);
+    });
+
+    await test.step("Хост добавляет слот на завтра", async () => {
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await hostBookingPage.addSlot(tomorrow.toISOString().slice(0, 10), "12:00");
+    });
+
+    await test.step("Слот создан", async () => {
+      await expect(hostBookingPage.slotsCard).toHaveCount(1);
+    });
+
+    await test.step("Гость находит хоста в каталоге", async () => {
+      await guestPage.goto(ROUTES.home);
+      await guestBookingPage.searchBySkill(skillTag);
+    });
+
+    await test.step("Карточка хоста доступна", async () => {
+      await expect(guestBookingPage.getHostCard(host.name)).toBeVisible();
+    });
+
+    await test.step("Гость открывает страницу хоста", async () => {
+      await guestBookingPage.openHostCard(host.name);
+    });
+
+    await test.step("Страница хоста и свободный день отображаются", async () => {
+      await expect(guestBookingPage.personName).toHaveText(host.name);
+      await expect(guestBookingPage.bookingCalendarDay).toBeVisible();
+    });
+
+    const personUrl = guestPage.url();
+
+    await test.step("Гость выбирает слот и подтверждает бронирование", async () => {
+      await guestBookingPage.selectFirstAvailableSlot();
+      await guestBookingPage.bookingConfirmButton.click();
+    });
+
+    await test.step("Бронирование успешно", async () => {
+      await expect(guestBookingPage.bookingConfirmSuccess).toBeVisible({ timeout: 15_000 });
+      await expect(guestBookingPage.bookingConfirmError).not.toBeVisible();
+    });
+
+    await test.step("Оба участника открывают свои встречи", async () => {
+      await hostBookingPage.gotoMeetings();
+      await guestBookingPage.gotoMeetings();
+    });
+
+    await test.step("До отмены встреча есть у обоих участников в ближайших", async () => {
+      await expect(hostBookingPage.getMeetingCard(guest.name)).toBeVisible();
+      await expect(guestBookingPage.getMeetingCard(host.name)).toBeVisible();
+    });
+
+    await test.step("Хост отменяет бронирование, оба участника обновляют страницы", async () => {
+      await hostBookingPage.cancelMeeting(guest.name);
+      await hostPage.reload();
+      await guestPage.reload();
+    });
+
+    await test.step("У обоих участников встреча переместилась из ближайших в прошедшие и отменённые", async () => {
+      await expect(hostBookingPage.getMeetingCard(guest.name)).toHaveCount(0);
+      await expect(guestBookingPage.getMeetingCard(host.name)).toHaveCount(0);
+      await expect(hostBookingPage.getPastMeetingCard(guest.name)).toBeVisible();
+      await expect(guestBookingPage.getPastMeetingCard(host.name)).toBeVisible();
+    });
+
+    await test.step("Гость снова открывает календарь хоста", async () => {
+      await guestPage.goto(personUrl);
+      await guestBookingPage.bookingCalendarDay.click();
+    });
+
+    await test.step("После отмены слот снова доступен", async () => {
+      await expect(guestBookingPage.bookingCalendarTime).toHaveText(["12:00"]);
+    });
+  });
 });
